@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vikshit Pay</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    background: #f1f5f9;
+    min-height: 100vh;
+    padding-bottom: 90px;
+}
+
+.header {
+    background: #172554;
+    color: white;
+    padding: 22px;
+    text-align: center;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 30px;
+}
+
+.header p {
+    margin-bottom: 0;
+}
+
+.notice {
+    background: #fff3cd;
+    color: #664d03;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.container {
+    width: 92%;
+    max-width: 450px;
+    margin: 25px auto;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 18px;
+    box-shadow: 0 5px 20px rgba(0,0,0,.1);
+}
+
+label {
+    display: block;
+    margin-top: 15px;
+    margin-bottom: 6px;
+    font-weight: bold;
+}
+
+input {
+    width: 100%;
+    padding: 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+#paymentArea {
+    display: none;
+    text-align: center;
+    margin-top: 25px;
+}
+
+#qr {
+    display: flex;
+    justify-content: center;
+    margin: 20px;
+}
+
+.timer {
+    font-size: 22px;
+    font-weight: bold;
+    margin: 12px;
+}
+
+.expired {
+    display: none;
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.note {
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 15px;
+}
+
+.help {
+    position: fixed;
+    bottom: 18px;
+    left: 18px;
+    width: auto;
+    padding: 12px 18px;
+    margin: 0;
+    background: #172554;
+    border-radius: 25px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <h1>Vikshit Pay</h1>
+    <p>Simple UPI Payment</p>
+</div>
+
+<div class="notice">
+    Payment is completed through your UPI app.
+</div>
+
+<div class="container">
+
+<div class="card">
+
+    <h2>Send Money</h2>
+
+    <label for="sender">Sender Name</label>
+    <input
+        type="text"
+        id="sender"
+        placeholder="Enter your name"
+    >
+
+    <label for="receiver">Receiver Name</label>
+    <input
+        type="text"
+        id="receiver"
+        placeholder="Enter receiver's name"
+    >
+
+    <label for="amount">Amount (₹)</label>
+    <input
+        type="number"
+        id="amount"
+        min="1"
+        step="0.01"
+        placeholder="Enter amount"
+    >
+
+    <label for="password">Demo Password</label>
+    <input
+        type="password"
+        id="password"
+        placeholder="Demo only — never stored"
+    >
+
+    <button onclick="generatePayment()">
+        Generate Payment QR
+    </button>
+
+    <p class="note">
+        Never enter your UPI PIN, OTP, bank password,
+        card PIN, or other financial credentials here.
+    </p>
+
+    <div id="paymentArea">
+
+        <h3 id="paymentText"></h3>
+
+        <div class="timer">
+            QR expires in:
+            <span id="timer">05:00</span>
+        </div>
+
+        <div id="qr"></div>
+
+        <!-- OPEN UPI APP BUTTON -->
+        <button onclick="openUPI()">
+            Open UPI App
+        </button>
+
+        <p class="note">
+            Your phone will try to open a compatible
+            UPI application with the payment details.
+        </p>
+
+    </div>
+
+    <div class="expired" id="expired">
+        QR expired. Please generate a new payment QR.
+    </div>
+
+</div>
+
+</div>
+
+<button class="help" onclick="openSupport()">
+    ⚙ Help & Support
+</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script>
+
+const UPI_ID = "2b24e24a92c343428d0c@okaxis";
+const PAYEE_NAME = "Vikshit Bharada";
+
+let paymentURL = "";
+let timerInterval = null;
+
+
+/* =========================
+   GENERATE PAYMENT
+========================= */
+
+function generatePayment() {
+
+    const sender =
+        document.getElementById("sender").value.trim();
+
+    const receiver =
+        document.getElementById("receiver").value.trim();
+
+    const amount =
+        parseFloat(document.getElementById("amount").value);
+
+    if (!sender) {
+        alert("Please enter the sender name.");
+        return;
+    }
+
+    if (!receiver) {
+        alert("Please enter the receiver name.");
+        return;
+    }
+
+    if (!amount || amount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
+    }
+
+    /*
+       The demo password is immediately cleared.
+       It is NOT stored or transmitted.
+    */
+
+    document.getElementById("password").value = "";
+
+    if (timerInterval) {
+        clearInterval(timerInterval);
+    }
+
+    /*
+       Standard UPI payment URI
+    */
+
+    paymentURL =
+        "upi://pay" +
+        "?pa=" + encodeURIComponent(UPI_ID) +
+        "&pn=" + encodeURIComponent(PAYEE_NAME) +
+        "&am=" + encodeURIComponent(amount.toFixed(2)) +
+        "&cu=INR";
+
+    /* Clear previous QR */
+
+    document.getElementById("qr").innerHTML = "";
+
+    /* Generate QR */
+
+    new QRCode(document.getElementById("qr"), {
+        text: paymentURL,
+        width: 250,
+        height: 250
+    });
+
+    document.getElementById("paymentText").innerText =
+        "Pay ₹" + amount.toFixed(2);
+
+    document.getElementById("paymentArea").style.display =
+        "block";
+
+    document.getElementById("expired").style.display =
+        "none";
+
+    startTimer();
+}
+
+
+/* =========================
+   FIVE-MINUTE TIMER
+========================= */
+
+function startTimer() {
+
+    let seconds = 300;
+
+    updateTimer(seconds);
+
+    timerInterval = setInterval(function() {
+
+        seconds--;
+
+        updateTimer(seconds);
+
+        if (seconds <= 0) {
+
+            clearInterval(timerInterval);
+
+            document.getElementById("paymentArea").style.display =
+                "none";
+
+            document.getElementById("expired").style.display =
+                "block";
+
+            paymentURL = "";
+        }
+
+    }, 1000);
+}
+
+
+function updateTimer(seconds) {
+
+    const minutes =
+        Math.floor(seconds / 60);
+
+    const remaining =
+        seconds % 60;
+
+    document.getElementById("timer").innerText =
+        String(minutes).padStart(2, "0") +
+        ":" +
+        String(remaining).padStart(2, "0");
+}
+
+
+/* =========================
+   OPEN UPI APP
+========================= */
+
+function openUPI() {
+
+    if (!paymentURL) {
+        alert("This payment QR has expired.");
+        return;
+    }
+
+    /*
+       This launches the standard UPI payment URI.
+       Android/your device chooses a compatible UPI app.
+    */
+
+    window.location.href = paymentURL;
+}
+
+
+/* =========================
+   VIKSHIT SERVICE SUPPORT
+========================= */
+
+function openSupport() {
+
+    const supportWindow = window.open("", "_blank");
+
+    if (!supportWindow) {
+        alert("Please allow pop-ups for this website.");
+        return;
+    }
+
+    supportWindow.document.write(`
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Vikshit Service Support</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    background: #f1f5f9;
+    color: #172554;
+}
+
+.header {
+    background: #172554;
+    color: white;
+    padding: 35px 20px;
+    text-align: center;
+}
+
+.header h1 {
+    margin: 0;
+    font-size: 30px;
+}
+
+.container {
+    width: 92%;
+    max-width: 700px;
+    margin: 25px auto;
+}
+
+.box {
+    background: white;
+    padding: 25px;
+    margin-bottom: 20px;
+    border-radius: 16px;
+    box-shadow: 0 5px 18px rgba(0,0,0,.08);
+}
+
+.box h2 {
+    margin-top: 0;
+}
+
+.question {
+    font-weight: bold;
+    margin-top: 20px;
+}
+
+.answer {
+    color: #475569;
+    line-height: 1.6;
+}
+
+.warning {
+    background: #fff3cd;
+    color: #664d03;
+    padding: 16px;
+    border-radius: 10px;
+    line-height: 1.6;
+}
+
+.contact {
+    background: #eff6ff;
+    padding: 18px;
+    border-radius: 12px;
+    line-height: 1.7;
+}
+
+.back {
+    width: 100%;
+    padding: 14px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.footer {
+    text-align: center;
+    padding: 25px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+<h1>Vikshit Service Support</h1>
+
+<p>Help Center & Customer Support</p>
+
+</div>
+
+
+<div class="container">
+
+
+<div class="box">
+
+<h2>How can we help?</h2>
+
+<p class="answer">
+
+Welcome to Vikshit Service Support.
+
+Here you can find information about
+payments, QR codes, payment problems,
+and account safety.
+
+</p>
+
+</div>
+
+
+<div class="box">
+
+<h2>Frequently Asked Questions</h2>
+
+
+<p class="question">
+1. My QR code is not scanning.
+</p>
+
+<p class="answer">
+Make sure the QR code is completely visible
+and your UPI application supports UPI payments.
+</p>
+
+
+<p class="question">
+2. My QR code expired.
+</p>
+
+<p class="answer">
+The five-minute website countdown has ended.
+Return to the payment page and generate a new QR.
+</p>
+
+
+<p class="question">
+3. My payment failed.
+</p>
+
+<p class="answer">
+Check the transaction status inside your UPI app.
+If necessary, contact your bank or UPI provider
+through its official support channel.
+</p>
+
+
+<p class="question">
+4. Money was deducted but the receiver has not
+received it.
+</p>
+
+<p class="answer">
+Check the transaction status and reference number
+inside your UPI app. Contact your bank or payment
+provider if the issue remains unresolved.
+</p>
+
+
+<p class="question">
+5. What information should I never share?
+</p>
+
+<p class="answer">
+Never share your UPI PIN, OTP, card PIN,
+bank password, or verification codes.
+</p>
+
+
+<p class="question">
+6. The amount shown is incorrect.
+</p>
+
+<p class="answer">
+Do not approve the payment until the recipient
+and amount shown in your UPI app are correct.
+</p>
+
+</div>
+
+
+<div class="box">
+
+<h2>Payment Safety</h2>
+
+<div class="warning">
+
+<strong>Important security notice</strong>
+
+<br><br>
+
+Vikshit Pay should never ask you to provide
+your UPI PIN, OTP, card PIN, or bank password.
+
+Only enter such information inside your
+official banking or UPI application when required.
+
+</div>
+
+</div>
+
+
+<div class="box">
+
+<h2>Contact Vikshit Service Support</h2>
+
+<div class="contact">
+
+<strong>Email:</strong><br>
+YOUR-SUPPORT-EMAIL@example.com
+
+<br><br>
+
+<strong>Phone:</strong><br>
+YOUR-SUPPORT-PHONE
+
+<br><br>
+
+<strong>Support Hours:</strong><br>
+Monday – Saturday
+
+</div>
+
+<p class="answer">
+
+Replace these placeholder details with your
+real authorized support information before
+publishing the website.
+
+</p>
+
+</div>
+
+
+<div class="box">
+
+<h2>Information to have ready</h2>
+
+<p class="answer">
+
+When contacting support, keep your transaction
+reference number, date, amount, and transaction
+status available.
+
+<br><br>
+
+<strong>
+Never send your UPI PIN or password to support.
+</strong>
+
+</p>
+
+</div>
+
+
+<button class="back" onclick="window.close()">
+
+Close Support
+
+</button>
+
+
+</div>
+
+
+<div class="footer">
+
+Vikshit Service Support<br>
+© 2026 Vikshit Pay
+
+</div>
+
+
+</body>
+
+</html>
+
+    `);
+
+    supportWindow.document.close();
+}
+
+</script>
+
+</body>
+</html>
